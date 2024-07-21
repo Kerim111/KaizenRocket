@@ -14,7 +14,7 @@
 /*
 yapılacaklar:
 
--şu an ilk başta com açılmaya çalışılıyor ilk kullanıcıdan hangi portu açmak istediği sorulcak sonra açılcak
++şu an ilk başta com açılmaya çalışılıyor ilk kullanıcıdan hangi portu açmak istediği sorulcak sonra açılcak (bitti - KERIM)
 
 -verilerin gelme sıklığı kontrol edilecek
 
@@ -23,6 +23,7 @@ yapılacaklar:
 -gelen veri - kullanıcalak veri - giden veri strucları düzenlenecek
 
 -refresh ile veriler yenileniyor -> refreshin içindeki parametre atama kısmı başka fonksiyona atılacak refresh her veri geldiğinde çağırılacak
++fonksiyonlar ayrıldı gelme sıklığı ayarlandığında refresh çağılablir - KERIM
 
 -süre tutulacak buna göre veri gönderme çağıralacak
 
@@ -51,9 +52,11 @@ typedef struct {
     LoRaData2 data2;
 } CombinedData;
 
-void mainreciever();
+void mainprogram(HANDLE,HANDLE);
 void paket_olustur();
-void portopentosend();
+HANDLE portopentosend();
+HANDLE portopentorecieve();
+void sendpacket(HANDLE hSerial);
 int read_from_serial_port(HANDLE hSerial, unsigned char *data);
 void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *combinedData);
 char comrecieve[5];
@@ -211,7 +214,7 @@ void RefreshValues() {
         SetWindowText(hwndVariableDisplay[i], displayText);
     }
 }
-//program main fonksiyonu
+//ilk main fonksiyonu
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     const char CLASS_NAME[] = "Sample Window Class";
 
@@ -239,7 +242,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    mainreciever();
+	HANDLE sendserial = portopentosend();
+	HANDLE recieveserial = portopentorecieve();
+    mainprogram(sendserial,recieveserial);
     return 0;
 }
 
@@ -390,12 +395,54 @@ void paket_olustur() {
     olusturalacak_paket[76] = 0x0D;
     olusturalacak_paket[77] = 0x0A;
 }
+HANDLE portopentorecieve(){
+	HANDLE hSerial;
+    DCB dcbSerialParams = {0};
+    COMMTIMEOUTS timeouts = {0};
+    
 
-void portopentosend() {
+    hSerial = CreateFile("COM3", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hSerial == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "Seri port açma başarısız\n");
+        return NULL;
+    }
+
+    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+    if (!GetCommState(hSerial, &dcbSerialParams)) {
+        fprintf(stderr, "Seri port ayarları alınamadı\n");
+        return NULL;
+    }
+
+    if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
+    else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
+    else if(baudrecieve == 19200){dcbSerialParams.BaudRate = CBR_19200;}
+    else{dcbSerialParams.BaudRate = CBR_9600;}
+    dcbSerialParams.ByteSize = 8;
+    dcbSerialParams.StopBits = ONESTOPBIT;
+    dcbSerialParams.Parity = NOPARITY;
+
+    if (!SetCommState(hSerial, &dcbSerialParams)) {
+        fprintf(stderr, "Seri port ayarları uygulanamadı\n");
+        return NULL;
+    }
+
+    timeouts.ReadIntervalTimeout = 50;
+    timeouts.ReadTotalTimeoutConstant = 50;
+    timeouts.ReadTotalTimeoutMultiplier = 10;
+    timeouts.WriteTotalTimeoutConstant = 50;
+    timeouts.WriteTotalTimeoutMultiplier = 10;
+
+    if (!SetCommTimeouts(hSerial, &timeouts)) {
+        fprintf(stderr, "Seri port zaman aşımı ayarları uygulanamadı\n");
+        return NULL;
+    }
+	return hSerial;
+}
+HANDLE portopentosend() {
     HANDLE hSerial = CreateFile("COM7", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     if (hSerial == INVALID_HANDLE_VALUE) {
         perror("Unable to open COM send");
-        return;
+        return NULL;
     }
 
     DCB dcbSerialParams = {0};
@@ -404,7 +451,7 @@ void portopentosend() {
     if (!GetCommState(hSerial, &dcbSerialParams)) {
         perror("GetCommState error");
         CloseHandle(hSerial);
-        return;
+        return NULL;
     }
     if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
     else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
@@ -417,7 +464,7 @@ void portopentosend() {
     if (!SetCommState(hSerial, &dcbSerialParams)) {
         perror("SetCommState error");
         CloseHandle(hSerial);
-        return;
+        return NULL;
     }
 
     COMMTIMEOUTS timeouts = {0};
@@ -430,10 +477,13 @@ void portopentosend() {
     if (!SetCommTimeouts(hSerial, &timeouts)) {
         perror("SetCommTimeouts error");
         CloseHandle(hSerial);
-        return;
+        return NULL;
     }
-
-    DWORD bytes_written;
+	return hSerial;
+    
+}
+void sendpacket(HANDLE hSerial){
+	DWORD bytes_written;
     if (!WriteFile(hSerial, olusturalacak_paket, sizeof(olusturalacak_paket), &bytes_written, NULL)) {
         perror("WriteFile error");
     } else {
@@ -459,53 +509,13 @@ void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *c
     combinedData->data2.altitude = (float)data2 / 4.0f;
 }
 
-void mainreciever() {
+void mainprogram(HANDLE sendserial,HANDLE recieveserial) {
 if(run){
-    HANDLE hSerial;
-    DCB dcbSerialParams = {0};
-    COMMTIMEOUTS timeouts = {0};
     unsigned char lora_data1, lora_data2;
     CombinedData combinedData;
-
-    hSerial = CreateFile("COM3", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hSerial == INVALID_HANDLE_VALUE) {
-        fprintf(stderr, "Seri port açma başarısız\n");
-        return;
-    }
-
-    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-    if (!GetCommState(hSerial, &dcbSerialParams)) {
-        fprintf(stderr, "Seri port ayarları alınamadı\n");
-        return;
-    }
-
-    if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
-    else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
-    else if(baudrecieve == 19200){dcbSerialParams.BaudRate = CBR_19200;}
-    else{dcbSerialParams.BaudRate = CBR_9600;}
-    dcbSerialParams.ByteSize = 8;
-    dcbSerialParams.StopBits = ONESTOPBIT;
-    dcbSerialParams.Parity = NOPARITY;
-
-    if (!SetCommState(hSerial, &dcbSerialParams)) {
-        fprintf(stderr, "Seri port ayarları uygulanamadı\n");
-        return;
-    }
-
-    timeouts.ReadIntervalTimeout = 50;
-    timeouts.ReadTotalTimeoutConstant = 50;
-    timeouts.ReadTotalTimeoutMultiplier = 10;
-    timeouts.WriteTotalTimeoutConstant = 50;
-    timeouts.WriteTotalTimeoutMultiplier = 10;
-
-    if (!SetCommTimeouts(hSerial, &timeouts)) {
-        fprintf(stderr, "Seri port zaman aşımı ayarları uygulanamadı\n");
-        return;
-    }
-
     while (1) {
-        if (read_from_serial_port(hSerial, &lora_data1) > 0 &&
-            read_from_serial_port(hSerial, &lora_data2) > 0) {
+        if (read_from_serial_port(recieveserial, &lora_data1) > 0 &&
+            read_from_serial_port(recieveserial, &lora_data2) > 0) {
             process_lora_data(lora_data1, lora_data2, &combinedData);
 
             printf("LoRa Modülü 1 - ID: %d, Sıcaklık: %.2f, Nem: %.2f\n", 

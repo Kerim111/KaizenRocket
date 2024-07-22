@@ -8,9 +8,10 @@
 #define IDC_COMPORT_RECIEVE 101
 #define IDC_BAUDRATE_RECIEVE 102
 #define IDC_COMPORT_SEND 103
-#define IDC_BAUDRATE_SEND 104
-#define IDC_REFRESH_BUTTON 105
-#define IDC_SET_PARAMETERS_BUTTON 105
+#define IDC_BAUDRATE_SEND 106
+#define IDC_REFRESH_BUTTON 107
+#define IDC_SET_PARAMETERS_BUTTON 108
+
 /*
 yapılacaklar:
 
@@ -27,6 +28,8 @@ yapılacaklar:
 
 -süre tutulacak buna göre veri gönderme çağıralacak
 
+-program durdurucu eklenecek
+
 -ui değişecek
 
 -tüm parçalar test edilecek
@@ -34,7 +37,10 @@ yapılacaklar:
 *** tek threat olacak main fonsiyonda tutukuluk olmaması için while döngüleri içinde bekleme olmamalı***
 
 */
+int stop = 0;
 int run = 0; // Programın çalışıp çalışmadığını kontrol etmek için bayrak
+HANDLE sendserial;
+HANDLE recieveserial;
 typedef struct {
     unsigned char id;
     float temperature;
@@ -52,7 +58,7 @@ typedef struct {
     LoRaData2 data2;
 } CombinedData;
 
-void mainprogram(HANDLE,HANDLE); // Ana program fonksiyonu
+void mainprogram(); // Ana program fonksiyonu
 void paket_olustur(); // Veri paketi oluşturma fonksiyonu
 HANDLE portopentosend(); // Veri gönderme portu açma fonksiyonu
 HANDLE portopentorecieve(); // Veri alma portu açma fonksiyonu
@@ -167,6 +173,7 @@ case WM_CREATE: {
 
 case WM_COMMAND: {
     if (LOWORD(wParam) == IDC_SET_PARAMETERS_BUTTON) { // Set Parameters butonuna tıklanınca
+		run = 0;
         char comPortTextRecieve[100], baudRateTextRecieve[100];
         char comPortTextSend[100], baudRateTextSend[100];
         char teamIDText[100];
@@ -190,6 +197,8 @@ case WM_COMMAND: {
         MessageBox(hwnd, message, "Parameters Set", MB_OK); // Parametreleri gösteren bir mesaj kutusu
 
         // Diğer işlemler burada yapılabilir
+		sendserial = portopentosend(); // Veri gönderme portunu aç
+		recieveserial = portopentorecieve(); // Veri alma portunu aç
         run = 1; // Programın çalıştığını belirtmek için bayrağı ayarla
         RefreshValues(); // UI'da değerleri yenile
         
@@ -242,9 +251,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-	HANDLE sendserial = portopentosend(); // Veri gönderme portunu aç
-	HANDLE recieveserial = portopentorecieve(); // Veri alma portunu aç
-    mainprogram(sendserial,recieveserial); // Ana programı çalıştır
+    mainprogram(); // Ana programı çalıştır
     return 0;
 }
 
@@ -402,7 +409,7 @@ HANDLE portopentorecieve(){
     COMMTIMEOUTS timeouts = {0};
     
     // Seri portu açma ve ayarlama
-    hSerial = CreateFile("COM3", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    hSerial = CreateFile(comrecieve, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hSerial == INVALID_HANDLE_VALUE) {
         fprintf(stderr, "Seri port açma başarısız\n");
         return NULL;
@@ -443,7 +450,7 @@ HANDLE portopentorecieve(){
 
 HANDLE portopentosend() {
     // Veri gönderme portunu açma ve ayarlama
-    HANDLE hSerial = CreateFile("COM7", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    HANDLE hSerial = CreateFile(comsend, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     if (hSerial == INVALID_HANDLE_VALUE) {
         perror("Unable to open COM send");
         return NULL;
@@ -459,9 +466,9 @@ HANDLE portopentosend() {
     }
 
     // Baud rate ayarlama
-    if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
-    else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
-    else if(baudrecieve == 19200){dcbSerialParams.BaudRate = CBR_19200;}
+    if(baudsend == 2400){dcbSerialParams.BaudRate = CBR_2400;}
+    else if(baudsend == 9600){dcbSerialParams.BaudRate = CBR_9600;}
+    else if(baudsend == 19200){dcbSerialParams.BaudRate = CBR_19200;}
     else{dcbSerialParams.BaudRate = CBR_9600;}
     dcbSerialParams.ByteSize = 8;
     dcbSerialParams.StopBits = ONESTOPBIT;
@@ -519,11 +526,12 @@ void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *c
     combinedData->data2.altitude = (float)data2 / 4.0f;
 }
 
-void mainprogram(HANDLE sendserial,HANDLE recieveserial) {
-if(run){
-    unsigned char lora_data1, lora_data2;
+void mainprogram() {
+	unsigned char lora_data1, lora_data2;
     CombinedData combinedData;
-    while (1) {
+	while(stop == 0)
+	{
+	if(run){
         // Seri porttan veri okuma ve işleme döngüsü
         if (read_from_serial_port(recieveserial, &lora_data1) > 0 &&
             read_from_serial_port(recieveserial, &lora_data2) > 0) {
@@ -537,10 +545,11 @@ if(run){
         }
 
         Sleep(100); // 100 ms bekle
-    }
+    
     }
 	else{
 		Sleep(5); // Program çalışmıyorsa 5 ms bekle
+	}
 	}
 	return;
 }

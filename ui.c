@@ -34,7 +34,7 @@ yapılacaklar:
 *** tek threat olacak main fonsiyonda tutukuluk olmaması için while döngüleri içinde bekleme olmamalı***
 
 */
-int run = 0;
+int run = 0; // Programın çalışıp çalışmadığını kontrol etmek için bayrak
 typedef struct {
     unsigned char id;
     float temperature;
@@ -52,36 +52,36 @@ typedef struct {
     LoRaData2 data2;
 } CombinedData;
 
-void mainprogram(HANDLE,HANDLE);
-void paket_olustur();
-HANDLE portopentosend();
-HANDLE portopentorecieve();
-void sendpacket(HANDLE hSerial);
-int read_from_serial_port(HANDLE hSerial, unsigned char *data);
-void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *combinedData);
-char comrecieve[5];
-char comsend[5];
-int baudrecieve;
-int baudsend;
+void mainprogram(HANDLE,HANDLE); // Ana program fonksiyonu
+void paket_olustur(); // Veri paketi oluşturma fonksiyonu
+HANDLE portopentosend(); // Veri gönderme portu açma fonksiyonu
+HANDLE portopentorecieve(); // Veri alma portu açma fonksiyonu
+void sendpacket(HANDLE hSerial); // Veri gönderme fonksiyonu
+int read_from_serial_port(HANDLE hSerial, unsigned char *data); // Seri porttan veri okuma fonksiyonu
+void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *combinedData); // Gelen veriyi işleme fonksiyonu
+char comrecieve[5]; // COM port alıcı metin kutusundan alınan değer
+char comsend[5]; // COM port gönderici metin kutusundan alınan değer
+int baudrecieve; // Baud rate alıcı metin kutusundan alınan değer
+int baudsend; // Baud rate gönderici metin kutusundan alınan değer
 
-//UI
+// UI elemanları
 HWND hwndComPortTextBoxRecieve, hwndBaudRateTextBoxRecieve;
 HWND hwndComPortTextBoxSend, hwndBaudRateTextBoxSend;
 HWND hwndRefreshButton, hwndHeightDisplay, hwndVariableDisplay[15];
-HWND hwndTeamIDTextBox,hwndSetParametersButton;
-char height[10] = "****";
-char variableValues[15][10];
+HWND hwndTeamIDTextBox, hwndSetParametersButton;
+char height[10] = "****"; // Yükseklik verisi
+char variableValues[15][10]; // Diğer değişkenler için değerler
 
-void RefreshValues();
+void RefreshValues(); // UI'da verileri yenileme fonksiyonu
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
 case WM_DESTROY:{
-            PostQuitMessage(0);
+            PostQuitMessage(0); // Pencere kapatıldığında programı sonlandır
 return 0;}
 case WM_CREATE: {
-    int windowWidth = 800;
-    int xOffset = windowWidth - 220;
+    int windowWidth = 800; // Pencere genişliği
+    int xOffset = windowWidth - 220; // Sağ tarafta hizalanma için ofset
 
     // COM port (Recieve) etiketi
     CreateWindow("STATIC", "Enter COM Port (Recieve):",
@@ -166,32 +166,32 @@ case WM_CREATE: {
 }
 
 case WM_COMMAND: {
-    if (LOWORD(wParam) == IDC_SET_PARAMETERS_BUTTON) {
+    if (LOWORD(wParam) == IDC_SET_PARAMETERS_BUTTON) { // Set Parameters butonuna tıklanınca
         char comPortTextRecieve[100], baudRateTextRecieve[100];
         char comPortTextSend[100], baudRateTextSend[100];
         char teamIDText[100];
 
-        GetWindowText(hwndComPortTextBoxRecieve, comPortTextRecieve, 100);
-        GetWindowText(hwndBaudRateTextBoxRecieve, baudRateTextRecieve, 100);
-        GetWindowText(hwndComPortTextBoxSend, comPortTextSend, 100);
-        GetWindowText(hwndBaudRateTextBoxSend, baudRateTextSend, 100);
-        GetWindowText(hwndTeamIDTextBox, teamIDText, 100);
+        GetWindowText(hwndComPortTextBoxRecieve, comPortTextRecieve, 100); // COM port alıcı metin kutusundan değer al
+        GetWindowText(hwndBaudRateTextBoxRecieve, baudRateTextRecieve, 100); // Baud rate alıcı metin kutusundan değer al
+        GetWindowText(hwndComPortTextBoxSend, comPortTextSend, 100); // COM port gönderici metin kutusundan değer al
+        GetWindowText(hwndBaudRateTextBoxSend, baudRateTextSend, 100); // Baud rate gönderici metin kutusundan değer al
+        GetWindowText(hwndTeamIDTextBox, teamIDText, 100); // Takım ID metin kutusundan değer al
 
-        int baudRateRecieve = atoi(baudRateTextRecieve);
-        int baudRateSend = atoi(baudRateTextSend);
-		baudrecieve = baudRateRecieve;
-		baudsend = baudRateSend;
-		strcpy(comrecieve,comPortTextRecieve);
-		strcpy(comsend,comPortTextSend);
+        int baudRateRecieve = atoi(baudRateTextRecieve); // Baud rate alıcı değerini integer'a çevir
+        int baudRateSend = atoi(baudRateTextSend); // Baud rate gönderici değerini integer'a çevir
+		baudrecieve = baudRateRecieve; // Global baud rate alıcı değişkenine atama yap
+		baudsend = baudRateSend; // Global baud rate gönderici değişkenine atama yap
+		strcpy(comrecieve,comPortTextRecieve); // Global COM port alıcı değişkenine atama yap
+		strcpy(comsend,comPortTextSend); // Global COM port gönderici değişkenine atama yap
 		
-        char message[500];
+        char message[500]; // Mesaj tamponu
         sprintf(message, "COM Port (Recieve): %s\nBaud Rate (Recieve): %d\nCOM Port (Send): %s\nBaud Rate (Send): %d\nTeam ID: %s",
                 comPortTextRecieve, baudRateRecieve, comPortTextSend, baudRateSend, teamIDText);
-        MessageBox(hwnd, message, "Parameters Set", MB_OK);
+        MessageBox(hwnd, message, "Parameters Set", MB_OK); // Parametreleri gösteren bir mesaj kutusu
 
         // Diğer işlemler burada yapılabilir
-        run = 1;
-        RefreshValues();
+        run = 1; // Programın çalıştığını belirtmek için bayrağı ayarla
+        RefreshValues(); // UI'da değerleri yenile
         
     }
     return 0;
@@ -203,14 +203,14 @@ case WM_COMMAND: {
 }
 
 void RefreshValues() {
-    sprintf(height, "%d", rand() % 100);
+    sprintf(height, "%d", rand() % 100); // Rastgele yükseklik değeri oluştur
     char displayText[50];
-    sprintf(displayText, "Height - %s", height);
+    sprintf(displayText, "Height - %s", height); // Yükseklik değerini göstergeye ayarla
     SetWindowText(hwndHeightDisplay, displayText);
 
     for (int i = 0; i < 15; i++) {
-        sprintf(variableValues[i], "%d", rand() % 1000);
-        sprintf(displayText, "Variable %d - %s", i + 1, variableValues[i]);
+        sprintf(variableValues[i], "%d", rand() % 1000); // Rastgele değişken değerleri oluştur
+        sprintf(displayText, "Variable %d - %s", i + 1, variableValues[i]); // Değişken değerlerini göstergeye ayarla
         SetWindowText(hwndVariableDisplay[i], displayText);
     }
 }
@@ -242,9 +242,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-	HANDLE sendserial = portopentosend();
-	HANDLE recieveserial = portopentorecieve();
-    mainprogram(sendserial,recieveserial);
+	HANDLE sendserial = portopentosend(); // Veri gönderme portunu aç
+	HANDLE recieveserial = portopentorecieve(); // Veri alma portunu aç
+    mainprogram(sendserial,recieveserial); // Ana programı çalıştır
     return 0;
 }
 
@@ -395,12 +395,13 @@ void paket_olustur() {
     olusturalacak_paket[76] = 0x0D;
     olusturalacak_paket[77] = 0x0A;
 }
+
 HANDLE portopentorecieve(){
 	HANDLE hSerial;
     DCB dcbSerialParams = {0};
     COMMTIMEOUTS timeouts = {0};
     
-
+    // Seri portu açma ve ayarlama
     hSerial = CreateFile("COM3", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hSerial == INVALID_HANDLE_VALUE) {
         fprintf(stderr, "Seri port açma başarısız\n");
@@ -413,6 +414,7 @@ HANDLE portopentorecieve(){
         return NULL;
     }
 
+    // Baud rate ayarlama
     if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
     else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
     else if(baudrecieve == 19200){dcbSerialParams.BaudRate = CBR_19200;}
@@ -438,7 +440,9 @@ HANDLE portopentorecieve(){
     }
 	return hSerial;
 }
+
 HANDLE portopentosend() {
+    // Veri gönderme portunu açma ve ayarlama
     HANDLE hSerial = CreateFile("COM7", GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
     if (hSerial == INVALID_HANDLE_VALUE) {
         perror("Unable to open COM send");
@@ -453,6 +457,8 @@ HANDLE portopentosend() {
         CloseHandle(hSerial);
         return NULL;
     }
+
+    // Baud rate ayarlama
     if(baudrecieve == 2400){dcbSerialParams.BaudRate = CBR_2400;}
     else if(baudrecieve == 9600){dcbSerialParams.BaudRate = CBR_9600;}
     else if(baudrecieve == 19200){dcbSerialParams.BaudRate = CBR_19200;}
@@ -482,8 +488,10 @@ HANDLE portopentosend() {
 	return hSerial;
     
 }
+
 void sendpacket(HANDLE hSerial){
-	DWORD bytes_written;
+    DWORD bytes_written;
+    // Veri gönderme
     if (!WriteFile(hSerial, olusturalacak_paket, sizeof(olusturalacak_paket), &bytes_written, NULL)) {
         perror("WriteFile error");
     } else {
@@ -493,6 +501,7 @@ void sendpacket(HANDLE hSerial){
 
 int read_from_serial_port(HANDLE hSerial, unsigned char *data) {
     DWORD bytesRead;
+    // Seri porttan veri okuma
     if (!ReadFile(hSerial, data, 1, &bytesRead, NULL)) {
         return -1;
     }
@@ -500,6 +509,7 @@ int read_from_serial_port(HANDLE hSerial, unsigned char *data) {
 }
 
 void process_lora_data(unsigned char data1, unsigned char data2, CombinedData *combinedData) {
+    // Gelen veriyi işleme
     combinedData->data1.id = data1 >> 4;
     combinedData->data1.temperature = (data1 & 0x0F) * 10.0f;
     combinedData->data1.humidity = (float)data1 / 2.0f;
@@ -514,21 +524,23 @@ if(run){
     unsigned char lora_data1, lora_data2;
     CombinedData combinedData;
     while (1) {
+        // Seri porttan veri okuma ve işleme döngüsü
         if (read_from_serial_port(recieveserial, &lora_data1) > 0 &&
             read_from_serial_port(recieveserial, &lora_data2) > 0) {
             process_lora_data(lora_data1, lora_data2, &combinedData);
 
+            // İşlenmiş verileri yazdır
             printf("LoRa Modülü 1 - ID: %d, Sıcaklık: %.2f, Nem: %.2f\n", 
                     combinedData.data1.id, combinedData.data1.temperature, combinedData.data1.humidity);
             printf("LoRa Modülü 2 - ID: %d, Basınç: %.2f, Rakım: %.2f\n", 
                     combinedData.data2.id, combinedData.data2.pressure, combinedData.data2.altitude);
         }
 
-        Sleep(100);
+        Sleep(100); // 100 ms bekle
     }
     }
 	else{
-		Sleep(5);
+		Sleep(5); // Program çalışmıyorsa 5 ms bekle
 	}
 	return;
 }
